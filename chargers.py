@@ -2,6 +2,7 @@ import argparse
 import math
 import sys
 import requests
+from datetime import datetime, timezone
 from colorama import init, Fore, Style
 from geopy.geocoders import Nominatim
 
@@ -91,6 +92,37 @@ def get_station_max_power_kw(station):
                     continue
     return max_kw
 
+def get_relative_time(last_updated_str):
+    try:
+        # Truncate microseconds to 6 digits if necessary.
+        if "." in last_updated_str:
+            base, frac = last_updated_str.split(".", 1)
+            digits = ""
+            tz_offset = ""
+            for ch in frac:
+                if ch.isdigit():
+                    digits += ch
+                else:
+                    tz_offset = frac[len(digits):]
+                    break
+            digits = digits[:6]
+            last_updated_str = f"{base}.{digits}{tz_offset}"
+        last_updated = datetime.fromisoformat(last_updated_str)
+        now = datetime.now(timezone.utc)
+        diff = now - last_updated.astimezone(timezone.utc)
+        days = diff.days
+        hours, remainder = divmod(diff.seconds, 3600)
+        minutes, _ = divmod(remainder, 60)
+        parts = []
+        if days > 0:
+            parts.append(f"{days} days")
+        if hours > 0 or days > 0:
+            parts.append(f"{hours} hours")
+        parts.append(f"{minutes} minutes")
+        return " ".join(parts)
+    except Exception:
+        return "N/A"
+
 def format_google_maps_link(address, lat, lon):
     url = f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
     return f"\033]8;;{url}\033\\{address}\033]8;;\033\\"
@@ -148,15 +180,17 @@ def display_station_info(stations, query_lat, query_lon):
         print(Style.BRIGHT + "EVSEs:")
         for evse in evses:
             status = evse.get("status", "N/A")
+            last_updated_str = evse.get("lastUpdated")
+            relative_time = f"({get_relative_time(last_updated_str)})" if last_updated_str else ""
             if status.upper() == "AVAILABLE":
                 status_color = Fore.GREEN
                 free_icon = Fore.GREEN + "✓" + Style.RESET_ALL
             else:
                 status_color = Fore.RED
                 free_icon = Fore.RED + "✗" + Style.RESET_ALL
-            # Now prints as: Status: AVAILABLE ✓
+            # Status line now: "Status: AVAILABLE (4 hours 27 minutes) ✓"
             print(f"  - EVSE ID: {evse.get('evseId', 'N/A')}")
-            print(f"    Status: {status_color}{status} {free_icon}{Style.RESET_ALL}")
+            print(f"    Status: {status_color}{status} {relative_time} {free_icon}{Style.RESET_ALL}")
             print("    Connectors:")
             for connector in evse.get("connectors", []):
                 max_power = connector.get("maxPower", "N/A")
