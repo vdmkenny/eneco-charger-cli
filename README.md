@@ -16,7 +16,7 @@ Example usage:
 - Search by Address:
 
 ```
-python chargers.py --address "1600 Amphitheatre Parkway, Mountain View, CA"
+python chargers.py --address "Rooigemlaan 2 Gent"
 ```
 
 - Search by Coordinate:
